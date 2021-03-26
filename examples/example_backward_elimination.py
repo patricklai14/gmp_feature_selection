@@ -16,9 +16,6 @@ from model_eval import model_evaluation
 from gmp_feature_selection import backward_elimination
 
 def main():
-    args = parser.parse_args()
-    args_dict = vars(args)
-
     dir_prefix = "/storage/home/hpaceice1/plai30/sandbox"
     parallel_workspace = os.path.join(dir_prefix, "pace/parallel_workspace")
     OUTPUT_DIR = os.path.join(dir_prefix, "output")
@@ -57,8 +54,8 @@ def main():
                             cutoff=cutoff, sigmas=sigmas, nn_layers=3, nn_nodes=20, nn_learning_rate=1e-3, 
                             nn_batch_size=32, nn_epochs=1000)
 
-    back_elim = backward_elimination(OUTPUT_DIR, data, model_eval_params)
-    back_elim.run(enable_parallel=True, parallel_workspace=parallel_workspace, seed=1)
+    back_elim = backward_elimination.backward_elimination(data, model_eval_params)
+    back_elim.run(enable_parallel=True, parallel_workspace=parallel_workspace, seed=1, output_dir=OUTPUT_DIR)
 
 
 if __name__ == "__main__":

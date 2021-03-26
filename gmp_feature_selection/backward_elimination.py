@@ -16,10 +16,10 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
     def run(self, enable_parallel=False, parallel_workspace=None, seed=None, output_dir=None):
         #setup baseline MCSH params
         base_order = 9 #number of orders to include by default
-        base_group_params = {str(i): constants.groups_by_order[i] for i in range(base_order + 1)}
+        base_groups = {str(i): constants.groups_by_order[i] for i in range(base_order + 1)}
 
         base_group_params = model_eval.model_evaluation.get_model_eval_params(
-                                name="base", fp_type="gmp", mcsh_groups=base_group_params, seed=seed)
+                                name="base", fp_type="gmp", mcsh_groups=base_groups, seed=seed)
         base_params = model_eval.utils.merge_params(base_group_params, self.model_eval_params)
 
         #get baseline performance
@@ -29,7 +29,7 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
 
         stop_change_pct = 0.15
         prev_test_mse = base_test_mse
-        prev_group_params = copy.deepcopy(base_group_params)
+        prev_groups = copy.deepcopy(base_groups)
 
         MSEs = [base_test_mse]
         orders_removed = [-1]
@@ -41,20 +41,20 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
         while True:
             curr_min_test_mse = 1000000.
             curr_best_order = -1
-            curr_best_group_params = None
+            curr_best_groups = None
 
             candidate_orders = []
             candidate_params = []
             
             print("Creating configs for processing on Pace")
-            for order, order_params in prev_group_params.items():
-                group_params_candidate = copy.deepcopy(prev_group_params)
+            for order, order_params in prev_groups.items():
+                groups_candidate = copy.deepcopy(prev_groups)
                 order_str = str(order)
-                del group_params_candidate[order_str]
+                del groups_candidate[order_str]
 
                 eval_params_candidate = copy.deepcopy(base_params)
                 eval_params_candidate[model_eval.constants.CONFIG_JOB_NAME] = str(order)
-                eval_params_candidate[model_eval.constants.CONFIG_MCSH_GROUPS] = group_params_candidate
+                eval_params_candidate[model_eval.constants.CONFIG_MCSH_GROUPS] = groups_candidate
                 
                 candidate_orders.append(order)
                 candidate_params.append(eval_params_candidate)
@@ -71,12 +71,12 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
                 if curr_test_mse < curr_min_test_mse:
                     curr_min_test_mse = curr_test_mse
                     curr_best_order = curr_order
-                    curr_best_group_params = copy.deepcopy(curr_params[model_eval.constants.CONFIG_MCSH_GROUPS])
+                    curr_best_groups = copy.deepcopy(curr_params[model_eval.constants.CONFIG_MCSH_GROUPS])
 
             max_change_pct = (curr_min_test_mse - prev_test_mse) / prev_test_mse
             print("Best change: removing order {} changed test MSE by {} pct ({} to {})".format(
                 curr_best_order, max_change_pct, prev_test_mse, curr_min_test_mse))
-            print("Params for best change: {}".format(curr_best_group_params))
+            print("Groups for best change: {}".format(curr_best_groups))
 
             #check for stop criteria
             if max_change_pct < stop_change_pct:
@@ -84,7 +84,7 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
                 if max_change_pct < 0.:
                     prev_test_mse = curr_min_test_mse
         
-                prev_group_params = copy.deepcopy(curr_best_group_params)
+                prev_groups = copy.deepcopy(curr_best_groups)
 
                 MSEs.append(curr_min_test_mse)
                 orders_removed.append(curr_best_order)
