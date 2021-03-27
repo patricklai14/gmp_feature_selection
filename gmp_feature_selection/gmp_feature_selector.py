@@ -4,13 +4,13 @@ class gmp_feature_selector:
         self.model_eval_params = model_eval_params
 
         #these are set after the run() method is called
-        self.best_features = None
+        self.best_params = None
         self.best_error = -1.
         self.stats = None
 
-    def get_best_features():
-        if not self.best_features:
-            raise RuntimeError("best_features not set. It's possible the run() method has not yet been called")
+    def get_best_params():
+        if not self.best_params:
+            raise RuntimeError("best_params not set. It's possible the run() method has not yet been called")
 
         return self.best_features
 
