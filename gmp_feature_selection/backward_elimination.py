@@ -13,93 +13,99 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
     def __init__(self, data, model_eval_params):
         super().__init__(data, model_eval_params)
 
-    def run(self, enable_parallel=False, parallel_workspace=None, seed=None, output_dir=None):
+    def run(self, sigmas, stop_change_pct=0.15, selection_type="groups", enable_parallel=False, 
+            parallel_workspace=None, time_limit="00:30:00", mem_limit=2):
         #setup baseline MCSH params
-        base_order = 9 #number of orders to include by default
-        base_groups = {str(i): constants.groups_by_order[i] for i in range(base_order + 1)}
+        base_order = 5 #number of orders to include by default
+        base_groups = {str(i): {"groups": constants.groups_by_order[i], "sigmas": sigmas} 
+                        for i in range(base_order + 1)}
 
-        base_group_params = model_eval.model_evaluation.get_model_eval_params(
-                                name="base", fp_type="gmp", mcsh_groups=base_groups, seed=seed)
-        base_params = model_eval.utils.merge_params(base_group_params, self.model_eval_params)
+        base_params = self.model_eval_params
+        base_params["name"] = "base"
+        base_params["amptorch_config"]["dataset"]["fp_scheme"] = "mcsh"
+        base_params["amptorch_config"]["dataset"]["fp_params"]["MCSHs"] = base_groups
 
         #get baseline performance
         print("Testing base params: {}".format(base_params))
-        base_train_mse, base_test_mse = model_eval.model_evaluation.evaluate_model(base_params, self.data)
-        print("Base test MSE: {}".format(base_test_mse))
+        base_train_error, base_test_error = model_eval.model_evaluation.evaluate_models(
+                                            dataset=self.data, config_dicts=base_params, enable_parallel=True,
+                                            parallel_workspace=parallel_workspace, time_limit=time_limit, 
+                                            mem_limit=mem_limit)
+        print("Base test MSE: {}".format(base_test_error))
 
-        stop_change_pct = 0.15
-        prev_test_mse = base_test_mse
+        prev_test_error = base_test_error
         prev_groups = copy.deepcopy(base_groups)
 
-        MSEs = [base_test_mse]
-        orders_removed = [-1]
+        errors = [base_test_error]
+        removed = [-1]
 
         print("Backward elimination params: stop_change_pct={}".format(
                 stop_change_pct))
 
         #perform backward elimination
         while True:
-            curr_min_test_mse = 1000000.
-            curr_best_order = -1
+            curr_min_test_error = 1000000.
+            curr_best_id = -1
             curr_best_groups = None
 
-            candidate_orders = []
+            candidate_id = [] #either removed group or order
             candidate_params = []
             
             print("Creating configs for processing on Pace")
             for order, order_params in prev_groups.items():
-                groups_candidate = copy.deepcopy(prev_groups)
-                order_str = str(order)
-                del groups_candidate[order_str]
+                for group in order_params["groups"]:
+                    groups_candidate = copy.deepcopy(prev_groups)
+                    
+                    #remove group
+                    groups_candidate[order]["groups"].remove(group)
 
-                eval_params_candidate = copy.deepcopy(base_params)
-                eval_params_candidate[model_eval.constants.CONFIG_JOB_NAME] = str(order)
-                eval_params_candidate[model_eval.constants.CONFIG_MCSH_GROUPS] = groups_candidate
-                
-                candidate_orders.append(order)
-                candidate_params.append(eval_params_candidate)
+                    #remove order if no groups remaining
+                    if not groups_candidate[order]["groups"]:
+                        del groups_candidate[order]
+
+                    curr_id = (order, group)
+                    eval_params_candidate = copy.deepcopy(base_params)
+                    eval_params_candidate["name"] = "back_elim_{}".format(curr_id)
+                    eval_params_candidate["amptorch_config"]["dataset"]["fp_params"]["MCSHs"] = groups_candidate
+                    
+                    candidate_id.append(curr_id)
+                    candidate_params.append(eval_params_candidate)
 
             results = model_eval.model_evaluation.evaluate_models(
-                        self.data, config_dicts=candidate_params, enable_parallel=enable_parallel, 
-                        workspace=parallel_workspace, time_limit="00:20:00", mem_limit=2, conda_env="amptorch")
+                        dataset=self.data, config_dicts=candidate_params, enable_parallel=enable_parallel, 
+                        workspace=parallel_workspace, time_limit=time_limit, mem_limit=mem_limit, conda_env="amptorch")
 
-            for i in range(len(candidate_orders)):
-                curr_test_mse = results[i].test_error
-                curr_order = candidate_orders[i]
+            for i in range(len(candidate_id)):
+                curr_test_error = results[i].test_error
+                curr_id = candidate_id[i]
                 curr_params = candidate_params[i]
 
-                if curr_test_mse < curr_min_test_mse:
-                    curr_min_test_mse = curr_test_mse
-                    curr_best_order = curr_order
-                    curr_best_groups = copy.deepcopy(curr_params[model_eval.constants.CONFIG_MCSH_GROUPS])
+                if curr_test_error < curr_min_test_error:
+                    curr_min_test_error = curr_test_error
+                    curr_best_id = curr_id
+                    curr_best_groups = copy.deepcopy(curr_params["amptorch_config"]["dataset"]["fp_params"]["MCSHs"])
+                    self.best_params = curr_params
+                    self.best_error = curr_test_error
 
-            max_change_pct = (curr_min_test_mse - prev_test_mse) / prev_test_mse
-            print("Best change: removing order {} changed test MSE by {} pct ({} to {})".format(
-                curr_best_order, max_change_pct, prev_test_mse, curr_min_test_mse))
+            max_change_pct = (curr_min_test_error - prev_test_error) / prev_test_error
+            print("Best change: removing group {} changed test error by {} pct ({} to {})".format(
+                curr_best_id, max_change_pct, prev_test_error, curr_min_test_error))
             print("Groups for best change: {}".format(curr_best_groups))
 
             #check for stop criteria
             if max_change_pct < stop_change_pct:
-                
                 if max_change_pct < 0.:
-                    prev_test_mse = curr_min_test_mse
+                    prev_test_error = curr_min_test_error
         
                 prev_groups = copy.deepcopy(curr_best_groups)
 
-                MSEs.append(curr_min_test_mse)
-                orders_removed.append(curr_best_order)
-
-                if output_dir:
-                    #write results to file (overwrite on each iteration)
-                    results = pd.DataFrame(data={"order": orders_removed, 
-                                                 "test_mse": MSEs, 
-                                                 "iteration": range(len(MSEs))})
-                    results.to_csv(os.path.join(output_dir, "backward_elimination_results.csv"))
+                errors.append(curr_min_test_error)
+                removed.append(curr_best_id)
 
             else:
                 print("Best change was less than {} pct, stopping".format(stop_change_pct))
                 break
 
-        self.stats = pd.DataFrame(data={"order": orders_removed, 
-                                        "test_mse": MSEs,
-                                        "iteration": range(len(MSEs))})
+        self.stats = {"groups": removed, 
+                      "test_error": errors,
+                      "iteration": range(len(errors))}

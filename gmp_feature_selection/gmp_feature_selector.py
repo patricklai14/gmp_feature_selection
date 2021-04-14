@@ -1,7 +1,9 @@
+import copy
+
 class gmp_feature_selector:
     def __init__(self, data, model_eval_params):
         self.data = data
-        self.model_eval_params = model_eval_params
+        self.model_eval_params = copy.deepcopy(model_eval_params)
 
         #these are set after the run() method is called
         self.best_params = None
