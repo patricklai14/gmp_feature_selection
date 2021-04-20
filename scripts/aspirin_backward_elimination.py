@@ -66,7 +66,7 @@ def main():
             "force_coefficient": 0.0,
             "lr": 1e-3,
             "batch_size": 256,
-            "epochs": 50,
+            "epochs": 5000,
             "loss": "mae",
         },
         "dataset": {
@@ -96,12 +96,15 @@ def main():
         "amptorch_config": amptorch_config
     }
 
+    curr_dir = pathlib.Path(__file__).parent.absolute()
+    workspace = curr_dir / "workspace_search_{}".format(run_name)
     back_elim = backward_elimination.backward_elimination(data, base_config)
-    back_elim.run(sigmas, stop_change_pct=0.15, enable_parallel=True, parallel_workspace=workspace, 
-                  time_limit="05:00:00", mem_limit=2)
+    back_elim.run(sigmas, stop_change_pct=0.3, enable_parallel=True, parallel_workspace=workspace, 
+                  time_limit="03:00:00", mem_limit=2, conda_env="amptorch")
 
     #print results
     print("min error: {}, config:{}".format(back_elim.get_best_error(), back_elim.get_best_params()))
+    print("backward elimination stats: {}".format(back_elim.get_stats()))
 
     #compute test error for best params chosen by backward elimination
     print("Evaluating best model")

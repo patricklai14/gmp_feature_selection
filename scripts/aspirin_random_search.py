@@ -33,7 +33,14 @@ def main():
     elements = ["C","H","O"]
 
     #only use training images for feature selection
-    data = model_evaluation.dataset(train_images=train_imgs[:8000], test_images=train_imgs[8000:10000])
+    train_data_start_idx = (args_dict["seed"] - 1) * 2500
+    val_data_start_idx = train_data_start_idx + 2000
+    val_data_end_idx = val_data_start_idx + 500
+
+    print("train_data_start_idx: {}, val_data_start_idx: {}, val_data_end_idx: {}".format(
+            train_data_start_idx, val_data_start_idx, val_data_end_idx))
+    data = model_evaluation.dataset(train_images=train_imgs[train_data_start_idx:val_data_start_idx],
+                                    test_images=train_imgs[val_data_start_idx:val_data_end_idx])
 
     sigmas = [0.25, 1.0, 2.0]
     all_mcsh_groups = {"0": {"groups": [1]},
@@ -41,8 +48,8 @@ def main():
                        "2": {"groups": [1,2]},
                        "3": {"groups": [1,2,3]},
                        "4": {"groups": [1,2,3,4]},
-                       "5": {"groups": [1,2,3,4,5]},
-                       "6": {"groups": [1,2,3,4,5,6,7]}}
+                       "5": {"groups": [1,2,3,4,5]}}
+                       #"6": {"groups": [1,2,3,4,5,6,7]}}
 
     gaussians_dir = top_dir / "config/valence_gaussians"
     gmp_params = {
@@ -97,7 +104,7 @@ def main():
 
     target_groups_pct = args_dict["groups_pct"]
     target_num_groups = int(target_groups_pct * len(group_pairs))
-    num_random_trials = 20 
+    num_random_trials = 50 
 
     seed = args_dict["seed"]
     np.random.seed(seed)
@@ -134,7 +141,7 @@ def main():
     workspace = curr_dir / "workspace_search_{}".format(run_name)
     results = model_evaluation.evaluate_models(data, config_dicts=random_configs,
                                                enable_parallel=True, workspace=workspace,
-                                               time_limit="05:00:00", mem_limit=2, conda_env="amptorch")
+                                               time_limit="03:00:00", mem_limit=2, conda_env="amptorch")
 
     #print results
     errors = [metrics.test_error for metrics in results]

@@ -14,7 +14,7 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
         super().__init__(data, model_eval_params)
 
     def run(self, sigmas, stop_change_pct=0.15, selection_type="groups", enable_parallel=False, 
-            parallel_workspace=None, time_limit="00:30:00", mem_limit=2):
+            parallel_workspace=None, time_limit="00:30:00", mem_limit=2, conda_env="amptorch"):
         #setup baseline MCSH params
         base_order = 5 #number of orders to include by default
         base_groups = {str(i): {"groups": constants.groups_by_order[i], "sigmas": sigmas} 
@@ -27,10 +27,11 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
 
         #get baseline performance
         print("Testing base params: {}".format(base_params))
-        base_train_error, base_test_error = model_eval.model_evaluation.evaluate_models(
-                                            dataset=self.data, config_dicts=base_params, enable_parallel=True,
-                                            parallel_workspace=parallel_workspace, time_limit=time_limit, 
-                                            mem_limit=mem_limit)
+        base_results = model_eval.model_evaluation.evaluate_models(
+                        dataset=self.data, config_dicts=[base_params], enable_parallel=True,
+                        workspace=parallel_workspace, time_limit=time_limit, 
+                        mem_limit=mem_limit, conda_env=conda_env)
+        base_test_error = base_results[0].test_error
         print("Base test MSE: {}".format(base_test_error))
 
         prev_test_error = base_test_error
@@ -65,7 +66,7 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
 
                     curr_id = (order, group)
                     eval_params_candidate = copy.deepcopy(base_params)
-                    eval_params_candidate["name"] = "back_elim_{}".format(curr_id)
+                    eval_params_candidate["name"] = "back_elim_{}_{}".format(order, group)
                     eval_params_candidate["amptorch_config"]["dataset"]["fp_params"]["MCSHs"] = groups_candidate
                     
                     candidate_id.append(curr_id)
@@ -73,7 +74,7 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
 
             results = model_eval.model_evaluation.evaluate_models(
                         dataset=self.data, config_dicts=candidate_params, enable_parallel=enable_parallel, 
-                        workspace=parallel_workspace, time_limit=time_limit, mem_limit=mem_limit, conda_env="amptorch")
+                        workspace=parallel_workspace, time_limit=time_limit, mem_limit=mem_limit, conda_env=conda_env)
 
             for i in range(len(candidate_id)):
                 curr_test_error = results[i].test_error
@@ -107,5 +108,4 @@ class backward_elimination(gmp_feature_selector.gmp_feature_selector):
                 break
 
         self.stats = {"groups": removed, 
-                      "test_error": errors,
-                      "iteration": range(len(errors))}
+                      "test_error": errors}
