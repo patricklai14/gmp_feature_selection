@@ -7,9 +7,10 @@ import pathlib
 import pdb
 
 import model_eval
-from gmp_feature_selection import constants, gmp_feature_selector
+import gmp_feature_selection as gfs
+#from gmp_feature_selection import constants, gmp_feature_selector
 
-class random_search(gmp_feature_selector.gmp_feature_selector):
+class random_search(gfs.gmp_feature_selector):
     def __init__(self, data, model_eval_params):
         super().__init__(data, model_eval_params)
 
@@ -34,7 +35,7 @@ class random_search(gmp_feature_selector.gmp_feature_selector):
             num_orders = np.random.randint(low=1, high=11)
             gmp_orders = np.random.choice(10, num_orders, replace=False)
             gmp_orders.sort()
-            gmp_order_params = {str(i): constants.groups_by_order[i] for i in gmp_orders}
+            gmp_order_params = {str(i): gfs.groups_by_order[i] for i in gmp_orders}
 
             curr_trial_params[model_eval.constants.CONFIG_JOB_NAME] = str(i)
             curr_trial_params[model_eval.constants.CONFIG_CUTOFF] = cutoff
