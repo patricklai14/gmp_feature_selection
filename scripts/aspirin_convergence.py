@@ -17,7 +17,8 @@ def main():
     args = parser.parse_args()
     args_dict = vars(args)
 
-    sigmas = [0.25, 1.0, 2.0]
+    #sigmas = [0.25, 1.0, 2.0]
+    sigmas = [0.25, 0.75, 1.5, 2.0]
     all_mcsh_groups = {"0": {"groups": [1]},
                        "1": {"groups": [1]},
                        "2": {"groups": [1,2]},
@@ -127,7 +128,7 @@ def main():
 
         results = model_evaluation.evaluate_models(datasets=test_datasets, config_dicts=test_configs,
                                                    enable_parallel=True, workspace=workspace,
-                                                   time_limit="02:00:00", mem_limit=2, conda_env="amptorch",
+                                                   time_limit="03:00:00", mem_limit=2, conda_env="amptorch",
                                                    save_model_dir=save_model_dir, checkpoint_dirs=checkpoint_dirs)
 
         #print results

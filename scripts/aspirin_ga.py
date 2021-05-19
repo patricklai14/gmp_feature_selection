@@ -26,11 +26,10 @@ def main():
     train_data_file = top_dir / "p-amedford6-0/data/aspirin/aspirin_train_data_{}.p".format(args_dict["seed"])
     val_data_file_num = 1 if args_dict["seed"] == 5 else args_dict["seed"] + 1 
     val_data_file = top_dir / "p-amedford6-0/data/aspirin/aspirin_train_data_{}.p".format(val_data_file_num)
-    train_imgs = pickle.load(open(train_data_file, "rb"))
+    #train_imgs = pickle.load(open(train_data_file, "rb"))
     val_imgs = pickle.load(open(val_data_file, "rb"))
  
-    data = model_evaluation.dataset(train_images=train_imgs,
-                                    test_images=val_imgs[:10000])
+    data = model_evaluation.dataset(train_data_files=[train_data_file], test_images=val_imgs[:10000])
     elements = ["C","H","O"]
 
     sigmas = [0.25, 1.0, 2.0]
@@ -88,7 +87,7 @@ def main():
     }
 
     curr_dir = pathlib.Path(__file__).parent.absolute()
-    workspace = curr_dir / "workspace_search_{}".format(run_name)
+    workspace = curr_dir / "workspace_{}".format(run_name)
 
     ga = gfs.genetic_algorithm(data, base_config)
     ga.run(population_size=4, num_generations=2, target_groups_pct=0.8, max_order=7, crossover_prob=0.75, 
@@ -105,7 +104,7 @@ def main():
     test_datasets = []
     for i in range(num_eval_trials):
         curr_test_config = copy.deepcopy(ga.get_best_params())
-        curr_test_config["name"] = "eval_test_{}".format(i + 1)
+        curr_test_config["name"] = "eval_{}_{}".format(run_name, i + 1)
         curr_test_config["seed"] = 1
         curr_test_config["amptorch_config"]["cmd"]["seed"] = 1
 
@@ -116,8 +115,6 @@ def main():
         curr_dataset = model_evaluation.dataset(train_data_files=[curr_train_data_file], test_data_files=[curr_test_data_file])
         test_datasets.append(curr_dataset)
 
-    curr_dir = pathlib.Path(__file__).parent.absolute()
-    workspace = curr_dir / "workspace_eval_{}".format(run_name)
     results = model_evaluation.evaluate_models(datasets=test_datasets, config_dicts=test_configs,
                                                enable_parallel=True, workspace=workspace,
                                                time_limit="05:00:00", mem_limit=2, conda_env="amptorch")

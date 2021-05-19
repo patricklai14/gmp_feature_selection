@@ -98,7 +98,7 @@ class genetic_algorithm(gmp_fs.gmp_feature_selector):
         self.seq_len = len(self.all_groups)
 
         #generate initial population
-        target_num_groups = int(target_groups_pct * len(group_pairs))
+        target_num_groups = int(target_groups_pct * len(self.all_groups))
         population = self.generate_initial_population(population_size, target_num_groups)
 
         #compute fitness of initial population
