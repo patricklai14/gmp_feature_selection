@@ -9,28 +9,38 @@ import pdb
 import model_eval
 import gmp_feature_selection as gmp_fs
 
+class gene_sequence:
+    def __init__(self, gmp_groups, sigmas):
+        self.groups = gmp_groups
+        self.sigmas = sigmas
+
 class genetic_algorithm(gmp_fs.gmp_feature_selector):
     def __init__(self, data, model_eval_params):
         super().__init__(data, model_eval_params)
 
-    def generate_initial_population(self, population_size, target_num_groups):
+    def generate_initial_population(self, population_size, target_num_groups, num_sigmas):
+        #TODO: make this configurable
+        #sigmas = [0.25, 1.0, 2.0]
+        self.max_sigma = 2.5
+
         population = []
         for i in range(population_size):
             curr_indices = np.random.choice(self.seq_len, target_num_groups, replace=False)
-            curr_genes = [False] * self.seq_len
+            curr_groups = [False] * self.seq_len
 
             for idx in curr_indices:
-                curr_genes[idx] = True
+                curr_groups[idx] = True
 
-            population.append(curr_genes)
+            curr_sigmas = np.random.uniform(0.0, self.max_sigma, size=num_sigmas)
+            curr_sigmas = np.sort(curr_sigmas).tolist()
+
+            curr_seq = gene_sequence(curr_groups, curr_sigmas)
+            population.append(curr_seq)
 
         return population
 
     #convert gene representation to model parameters
     def get_model_eval_params_from_genes(self, sequences):
-        #TODO: make this configurable
-        sigmas = [0.25, 1.0, 2.0]
-
         eval_params = []
         for seq_num in range(len(sequences)):
             seq = sequences[seq_num]
@@ -38,13 +48,13 @@ class genetic_algorithm(gmp_fs.gmp_feature_selector):
 
             #extract gmp groups from gene encoding
             curr_gmp_groups = {}
-            for i in range(len(seq)):
-                if seq[i]:
+            for i in range(len(seq.groups)):
+                if seq.groups[i]:
                     #add corresponding group
                     curr_order, curr_group = self.all_groups[i]
 
                     if str(curr_order) not in curr_gmp_groups:
-                        curr_gmp_groups[str(curr_order)] = {"groups": [], "sigmas": sigmas}
+                        curr_gmp_groups[str(curr_order)] = {"groups": [], "sigmas": seq.sigmas}
 
                     curr_gmp_groups[str(curr_order)]["groups"].append(curr_group)
 
@@ -65,20 +75,65 @@ class genetic_algorithm(gmp_fs.gmp_feature_selector):
 
         return fitness_scores
 
-    #reverse sequence mutation
+    #perform uniform crossover
+    def crossover(self, parents, target_num_groups):
+        #gmp groups
+        groups_1 = []
+        groups_2 = []
+
+        gene_origin_1 = np.random.choice([0, 1], size=self.seq_len, replace=True)
+        gene_origin_2 = 1 - gene_origin_1
+        for j in range(self.seq_len):
+            groups_1.append(parents[gene_origin_1[j]].groups[j])
+            groups_2.append(parents[gene_origin_2[j]].groups[j])
+
+        #readjust sequence so that offspring have target number of groups
+        num_groups_1 = np.sum(groups_1)
+        if num_groups_1 != target_num_groups:
+            num_swaps = abs(num_groups_1 - target_num_groups)
+
+            if num_groups_1 < target_num_groups:
+                possible_swaps = (~np.array(groups_1) & np.array(groups_2)).nonzero()[0]
+            else:
+                possible_swaps = (np.array(groups_1) & ~np.array(groups_2)).nonzero()[0]
+
+            swap_indices = np.random.choice(possible_swaps, size=num_swaps, replace=False)
+            for swap_idx in swap_indices:
+                tmp = groups_1[swap_idx]
+                groups_1[swap_idx] = groups_2[swap_idx]
+                groups_2[swap_idx] = tmp
+
+        #sigmas (arithmetic crossover)
+        #make this configurable?
+        delta = 0.25
+        sigmas_parent_1 = np.array(parents[0].sigmas)
+        sigmas_parent_2 = np.array(parents[1].sigmas)
+
+        sigmas_1 = (delta * sigmas_parent_1) + ((1. - delta) * sigmas_parent_2) 
+        sigmas_2 = (delta * sigmas_parent_2) + ((1. - delta) * sigmas_parent_1) 
+
+        return (gene_sequence(groups_1, sigmas_1.tolist()), gene_sequence(groups_2, sigmas_2.tolist()))
+
+
     def mutate(self, sequence):
-        bounds = np.random.randint(0, len(sequence), size=2)
+        #reverse sequence mutation for groups
+        bounds = np.random.randint(0, len(sequence.groups), size=2)
         i = bounds.min()
         j = bounds.max()
 
         while i < j:
-            tmp = sequence[i]
-            sequence[i] = sequence[j]
-            sequence[j] = tmp
+            tmp = sequence.groups[i]
+            sequence.groups[i] = sequence.groups[j]
+            sequence.groups[j] = tmp
             i += 1
             j -= 1
 
-    def run(self, population_size, num_generations, target_groups_pct, max_order, crossover_prob=0.75, 
+        sigma_change_range = self.max_sigma / len(sequence.sigmas)
+        sigma_changes = np.random.uniform(-0.5 * sigma_change_range, 0.5 * sigma_change_range, len(sequence.sigmas))
+        new_sigmas = np.sort(np.array(sequence.sigmas) + sigma_changes)
+        sequence.sigmas = new_sigmas.tolist()
+
+    def run(self, population_size, num_generations, target_groups_pct, max_order, num_sigmas=5, crossover_prob=0.75, 
             mutation_prob=0.2, elitist=True, enable_parallel=True, parallel_workspace=None, time_limit="00:30:00", 
             mem_limit=2, conda_env="amptorch", seed=1):
         print("Running genetic algorithm with population_size={}, num_generations={}, target_groups_pct={}, "
@@ -103,7 +158,7 @@ class genetic_algorithm(gmp_fs.gmp_feature_selector):
 
         #generate initial population
         target_num_groups = int(target_groups_pct * len(self.all_groups))
-        population = self.generate_initial_population(population_size, target_num_groups)
+        population = self.generate_initial_population(population_size, target_num_groups, num_sigmas)
 
         #compute fitness of initial population
         eval_params = self.get_model_eval_params_from_genes(population)
@@ -128,7 +183,7 @@ class genetic_algorithm(gmp_fs.gmp_feature_selector):
             #perform elitist selection
             if elitist:
                 best_seq_idx = np.argmax(fitness_scores)
-                new_population.append(population[best_seq_idx])
+                new_population.append(copy.deepcopy(population[best_seq_idx]))
 
             #calculate selection probabilities and perform selection (for roulette wheel selection)
             print("Selecting parents for crossover")
@@ -142,41 +197,17 @@ class genetic_algorithm(gmp_fs.gmp_feature_selector):
             for i in range(num_parent_pairs):
                 curr_parents = (population[parents[i][0]], population[parents[i][1]])
 
-                offspring_1 = []
-                offspring_2 = []
-
                 #determine whether to perform crossover/mutation
                 do_crossover = np.random.rand() < crossover_prob
                 do_mutation_1 = np.random.rand() < mutation_prob
                 do_mutation_2 = np.random.rand() < mutation_prob
 
                 if do_crossover:
-                    #perform crossover (uniform)
-                    gene_origin_1 = np.random.choice([0, 1], size=self.seq_len, replace=True)
-                    gene_origin_2 = 1 - gene_origin_1
-                    for j in range(self.seq_len):
-                        offspring_1.append(curr_parents[gene_origin_1[j]][j])
-                        offspring_2.append(curr_parents[gene_origin_2[j]][j])
-
-                    #readjust sequence so that offspring have target number of groups
-                    offspring_1_groups = np.sum(offspring_1)
-                    if offspring_1_groups != target_num_groups:
-                        num_swaps = abs(offspring_1_groups - target_num_groups)
-
-                        if offspring_1_groups < target_num_groups:
-                            possible_swaps = (~np.array(offspring_1) & np.array(offspring_2)).nonzero()[0]
-                        else:
-                            possible_swaps = (np.array(offspring_1) & ~np.array(offspring_2)).nonzero()[0]
-
-                        swap_indices = np.random.choice(possible_swaps, size=num_swaps, replace=False)
-                        for swap_idx in swap_indices:
-                            tmp = offspring_1[swap_idx]
-                            offspring_1[swap_idx] = offspring_2[swap_idx]
-                            offspring_2[swap_idx] = tmp
+                    offspring_1, offspring_2 = self.crossover(curr_parents, target_num_groups)
                     
                 else:
-                    offspring_1 = curr_parents[0]
-                    offspring_2 = curr_parents[1]
+                    offspring_1 = copy.deepcopy(curr_parents[0])
+                    offspring_2 = copy.deepcopy(curr_parents[1])
 
                 #apply mutation(s) (reverse sequence)
                 if do_mutation_1:
