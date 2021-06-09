@@ -7,7 +7,7 @@ import pathlib
 import pdb
 import pickle
 
-from model_eval import model_evaluation, utils
+from model_eval import constants, model_evaluation, utils
 
 def main():
     parser = argparse.ArgumentParser(description="Run evaluation on aspirin dataset")
@@ -62,6 +62,7 @@ def main():
             "batch_size": 128,
             "epochs": 500,
             "loss": "mae",
+            "scheduler": {"policy": "StepLR", "params": {"step_size": 500, "gamma": 0.5}}
         },
         "dataset": {
             "val_split": 0.2,
@@ -86,7 +87,8 @@ def main():
     base_config = {
         "evaluation_type": "train_test_split",
         "seed": 1,
-        "amptorch_config": amptorch_config
+        "amptorch_config": amptorch_config,
+        constants.CONFIG_EVAL_LOSS_TYPE: constants.CONFIG_LOSS_TYPE_ATOM_MAE
     }
  
     run_name = "convergence_order_{}".format(args_dict["max_order"])
@@ -122,7 +124,7 @@ def main():
 
         results = model_evaluation.evaluate_models(dataset=curr_dataset, config_dicts=test_configs,
                                                    enable_parallel=True, workspace=workspace,
-                                                   time_limit="02:00:00", mem_limit=2, conda_env="amptorch",
+                                                   time_limit="03:00:00", mem_limit=2, conda_env="amptorch",
                                                    save_model_dir=save_model_dir, checkpoint_dirs=checkpoint_dirs)
 
         #print results

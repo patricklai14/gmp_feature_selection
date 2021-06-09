@@ -12,9 +12,11 @@ from model_eval import constants, model_evaluation
 from gmp_feature_selection import random_search
 
 def main():
-    parser = argparse.ArgumentParser(description="Run evaluation on aspirin dataset")
+    parser = argparse.ArgumentParser(description="Run evaluation on water dataset")
     parser.add_argument("--config", type=str, required=True,
                         help="config file containing gmp groups")
+    parser.add_argument("--lr", type=float, required=True)
+    parser.add_argument("--batch_size", type=int, required=True)
 
     args = parser.parse_args()
     args_dict = vars(args)
@@ -29,11 +31,9 @@ def main():
     seed = 1
     config_file = args_dict["config"].split('/')[-1]
     ext_start = config_file.find(".json")
-    run_name = "eval_only_{}".format(config_file[:ext_start])
+    run_name = "eval_only_{}_lr_{}_batch_{}".format(config_file[:ext_start], args_dict["lr"], args_dict["batch_size"])
 
     elements = ["H","O"]
-    sigmas = [0.25, 0.5, 1.0, 1.5, 2.0]
-
     gaussians_dir = top_dir / "sandbox/config/valence_gaussians"
     gmp_params = {
         "atom_gaussians": {
@@ -50,15 +50,16 @@ def main():
             "get_forces": False, 
             "num_layers": 5, 
             "num_nodes": 50, 
-            "batchnorm": True
+            "batchnorm": False
         },
         "optim": {
             "gpus": 0,
             "force_coefficient": 0.0,
-            "lr": 1e-3,
-            "batch_size": 128,
-            "epochs": 5000,
+            "lr": args_dict["lr"],
+            "batch_size": args_dict["batch_size"],
+            "epochs": 3000,
             "loss": "mae",
+            "scheduler": {"policy": "StepLR", "params": {"step_size": 500, "gamma": 0.5}}
         },
         "dataset": {
             "val_split": 0.2,
@@ -67,9 +68,10 @@ def main():
             "fp_params": gmp_params,
             "save_fps": False,
             "scaling": {
+                #"type": "standardize"
                 "type": "normalize", 
                 "range": (0, 1),
-                "elementwise":False
+                "elementwise": False
             }
         },
         "cmd": {
@@ -96,7 +98,7 @@ def main():
     test_configs.append(curr_test_config)
 
     curr_train_data_file = str(top_dir / "p-amedford6-0/data/water/train.traj")
-    curr_test_data_file = str(top_dir / "p-amedford6-0/data/aspirin/test.traj")
+    curr_test_data_file = str(top_dir / "p-amedford6-0/data/water/test.traj")
     curr_dataset = model_evaluation.dataset(train_data_files=[curr_train_data_file], test_data_files=[curr_test_data_file])
 
     workspace = curr_dir / "workspace_{}".format(run_name)
