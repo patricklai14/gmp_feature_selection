@@ -57,9 +57,9 @@ def main():
             "force_coefficient": 0.0,
             "lr": args_dict["lr"],
             "batch_size": args_dict["batch_size"],
-            "epochs": 3000,
-            "loss": "mae",
-            "scheduler": {"policy": "StepLR", "params": {"step_size": 500, "gamma": 0.5}}
+            "epochs": 1000,
+            "loss": "mae"
+            #"scheduler": {"policy": "StepLR", "params": {"step_size": 500, "gamma": 0.2}}
         },
         "dataset": {
             "val_split": 0.2,

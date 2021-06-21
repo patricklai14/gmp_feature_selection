@@ -10,15 +10,15 @@ import pickle
 from model_eval import constants, model_evaluation, utils
 
 def main():
-    parser = argparse.ArgumentParser(description="Run evaluation on aspirin dataset")
+    parser = argparse.ArgumentParser(description="Run evaluation on single water dataset")
     parser.add_argument("--max_order", type=int, required=True,
                         help="number of GMP orders to include")
 
     args = parser.parse_args()
     args_dict = vars(args)
 
-    sigmas = [0.25, 1.0, 2.0]
-    #sigmas = [0.25, 0.75, 1.5, 2.0]
+    #sigmas = [0.25, 1.0, 2.0]
+    sigmas = [0.25, 0.5, 1.0, 1.5, 2.0]
     all_mcsh_groups = {"0": {"groups": [1]},
                        "1": {"groups": [1]},
                        "2": {"groups": [1,2]},
@@ -98,8 +98,8 @@ def main():
     curr_test_config["seed"] = 1
     curr_test_config["amptorch_config"]["cmd"]["seed"] = 1
 
-    curr_train_data_file = str(top_dir / "p-amedford6-0/data/water/train.traj")
-    curr_test_data_file = str(top_dir / "p-amedford6-0/data/water/test.traj")
+    curr_train_data_file = str(top_dir / "p-amedford6-0/data/water/single/train.traj")
+    curr_test_data_file = str(top_dir / "p-amedford6-0/data/water/single/test.traj")
     curr_dataset = model_evaluation.dataset(train_data_files=[curr_train_data_file], test_data_files=[curr_test_data_file])
 
     curr_dir = pathlib.Path(__file__).parent.absolute()
@@ -123,7 +123,7 @@ def main():
         curr_test_config["amptorch_config"]["optim"]["lr"] = lr
         results = model_evaluation.evaluate_models(dataset=curr_dataset, config_dicts=[curr_test_config],
                                                    enable_parallel=True, workspace=workspace,
-                                                   time_limit="03:00:00", mem_limit=2, conda_env="amptorch",
+                                                   time_limit="00:30:00", mem_limit=2, conda_env="amptorch",
                                                    save_model_dir=save_model_dir, checkpoint_dirs=checkpoint_dirs)
 
         #print results
